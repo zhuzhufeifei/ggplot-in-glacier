@@ -1,0 +1,135 @@
+# feizhu in 2020-4-19 in  ITPCAS
+# 统计不同海拔的面积
+# 流域DEM
+# 冰川DEM(和流域的范围一致)
+# 重分类计算面积
+rm(list = ls())
+
+library(data.table)
+library(raster)
+library(ggplot2)
+library(extrafont)
+font_import()
+loadfonts(device="win")
+#fonts()
+path <- "D:/arcgis_plot/plotarea"
+
+Basin <- raster(paste0(path,"/","105_basin.tif"))
+
+
+Glacier <- raster(paste0(path,"/","105_glac.tif"))
+
+# 重分类
+
+# 形成重采样的
+
+alt <- 5000
+i <- 2
+mat <- data.frame()
+mat[1,1] <- alt
+while(alt<6500){
+  
+  # 如果大于6500停止寻找
+
+  alt <- alt + 90
+  
+  mat[i,1] <- alt
+  
+  i <- i + 1
+}
+
+mat$v2 <- mat$V1 + 90
+
+mat$v3 <- seq(1,nrow(mat))
+
+names(mat) <- NULL
+
+base <- as.matrix(mat)
+
+
+# base <- c(5240,5338,1,
+#           5338,5428,2,
+#           5428,5518,3,
+#           5518,5608,4,
+#           5608,5698,5,
+#           5698,5788,6,
+#           5788,5878,7,
+#           5878,5968,8,
+#           5968,6098,9,
+#           6098,6188,10)
+#rclmat <- matrix(base, ncol=3, byrow=TRUE)
+
+Basin_rec <- reclassify(Basin, base)
+
+Glacier_rec <- reclassify(Glacier, base)
+
+# 计算面积
+
+# 统计出现了多少个网格
+area <- data.frame()
+for (i in 1:nrow(base)) {
+  # 分别计算每一类的面积
+  temp <- calc(Basin_rec,fun = function(x){
+    ifelse(x!=i,NA,x)
+  })
+  
+  temp1 <- calc(Glacier_rec,fun = function(x){
+    ifelse(x!=i,NA,x)
+  })
+  
+  area[i,1] <- cellStats(temp,"sum")*90/1000*90/1000
+  
+  area[i,2] <- cellStats(temp1,"sum")*90/1000*90/1000
+  
+  if(area[i,2] == 0){
+    area[i,2] <- 0
+  }
+}
+
+names(area) <- c("Basin_area","Glacier_area")
+
+# 开始绘图
+
+#area$id <- seq(1,nrow(area),1)
+
+area$id <- as.factor(area$id)
+
+names(area) <- c("Basin_area","Glacier_area","id")
+
+#area <- reshape2::melt(area,id.vars = "id")
+
+
+x <- (base[,1]+base[,2])/2
+
+area$x <- x
+
+p <- ggplot(area)+
+  # 流域面积
+  geom_bar(aes(x=id,y=Basin_area),stat="identity",fill = "grey81")+
+  # 冰川面积
+  geom_bar(aes(x=id,y=Glacier_area),stat="identity",fill = "grey41")+
+  labs(x = "Elevation(m)",y = expression("Area"(km^2)))+
+  # 设置x
+  scale_x_discrete(expand = c(0,0),labels = x)+
+  # 设置y
+  scale_y_continuous(expand = c(0,0),limits = c(0,70))+
+  # 设置其他要素
+  theme_bw()+
+  theme(
+    
+    panel.background = element_rect(fill = NA,size = 1),
+    panel.grid = element_blank(),
+    
+    axis.text.x = element_text(size = 10,family = "serif"),
+    axis.title.x = element_text(size = 12,family = "serif"),
+    axis.text.y = element_text(size = 10,family = "serif"),
+    axis.title.y = element_text(size = 12,family = "serif")
+    
+  )+
+  coord_flip()
+ggsave("d:/105_alt_area.png",width = 8,height = 8,dpi = 1200)
+
+
+
+
+
